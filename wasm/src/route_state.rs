@@ -25,7 +25,7 @@ pub(crate) struct RouteUpdate {
     pub(crate) topology_version: Option<u64>,
 }
 
-const EASYTIER_VERSION: &str = "2.6.4-8428a89d-edge";
+const EASYTIER_VERSION: &str = "2.7.0-8b7f1f0-edge";
 const MAX_LEGACY_BITMAP_PEERS: usize = 8_192;
 const SAVED_ROUTE_VERSION_TTL_MS: u64 = 60_000;
 
@@ -45,6 +45,9 @@ struct SessionState {
     last_touch_ms: u64,
     last_topology_version: u64,
     last_topology_touch_ms: u64,
+    /// 2.7.0: 请求方连接信息中引用、但本端尚缺数据的节点，
+    /// 跨请求累积，数据补齐后移除（见 collect_missing_peer_ids）。
+    missing_peer_ids: BTreeSet<PeerId>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -411,6 +414,7 @@ impl RouteState {
                 session.peer_info_ver_map.clear();
                 session.foreign_net_ver = 0;
                 session.last_topology_version = 0;
+                session.missing_peer_ids.clear();
             }
             session.dst_session_id = Some(sid);
             session.we_are_initiator = !req.is_initiator;
@@ -472,10 +476,73 @@ impl RouteState {
             let session = g.sessions.get(&from_peer_id);
             session.and_then(|s| s.my_session_id).unwrap_or(1)
         };
+
+        // 2.7.0: 请求方声明的连接信息引用的节点，若本端缺少其
+        // 路由信息或连接信息，在响应中列出，请求方据此索要缺失数据。
+        // 移植自 peer_ospf_route.rs 的 collect_missing_peer_ids：
+        // 本中继无凭据节点与 ACL 概念，跳过对应过滤分支；
+        // 已补齐数据的节点从跨请求累积集合中移除，避免重复上报。
+        let (missing_peer_ids, missing_conn_peer_ids) = {
+            let mut missing = std::mem::take(
+                &mut g.sessions
+                    .entry(from_peer_id)
+                    .or_default()
+                    .missing_peer_ids,
+            );
+            if let Some(conn_info) = &req.conn_info {
+                match conn_info {
+                    ConnInfo::ConnBitmap(bitmap) => {
+                        missing.extend(bitmap.peer_ids.iter().map(|p| p.peer_id));
+                    }
+                    ConnInfo::ConnPeerList(list) => {
+                        for row in &list.peer_conn_infos {
+                            if let Some(peer) = &row.peer_id {
+                                missing.insert(peer.peer_id);
+                                missing.extend(row.connected_peer_ids.iter().copied());
+                            }
+                        }
+                    }
+                }
+            }
+            if missing.is_empty() {
+                (Vec::new(), Vec::new())
+            } else {
+                let mut missing_peer_ids = Vec::new();
+                let mut missing_conn_peer_ids = Vec::new();
+                missing.retain(|peer_id| {
+                    if *peer_id == my_peer_id {
+                        return false;
+                    }
+                    let info = g.peer_infos.get(peer_id);
+                    let conn = g.peer_conn_versions.get(peer_id);
+                    // 信息与连接都缺失的节点视为已失效，清除引用。
+                    if info.is_none() && conn.is_none() {
+                        return false;
+                    }
+                    let missing_info = info.is_none_or(|p| p.version == 0);
+                    let missing_conn = conn.is_none_or(|v| *v == 0);
+                    if missing_info {
+                        missing_peer_ids.push(*peer_id);
+                    }
+                    if missing_conn {
+                        missing_conn_peer_ids.push(*peer_id);
+                    }
+                    missing_info || missing_conn
+                });
+                g.sessions
+                    .entry(from_peer_id)
+                    .or_default()
+                    .missing_peer_ids = missing;
+                (missing_peer_ids, missing_conn_peer_ids)
+            }
+        };
+
         let resp = SyncRouteInfoResponse {
             is_initiator: !req.is_initiator,
             session_id: server_session_id,
             error: None,
+            missing_peer_ids,
+            missing_conn_peer_ids,
         };
 
         Ok(RouteSyncOutcome {

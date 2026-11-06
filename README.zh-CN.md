@@ -130,7 +130,7 @@ easytier-core \
 - 每个 Durable Object 最多同时保持 2048 条 WebSocket 连接
 - Worker 不包含本地 TUN 接口，也不会创建 UDP 打洞 socket；它会中转控制 RPC，让客户端之间直接建立打洞链路。
 - 会话和防重放状态保存在非休眠 Durable Object 中。
-- Protobuf schema 与 EasyTier 2.6.4 的 `easytier/src/proto` 保持逐字一致。
+- Protobuf schema 与 EasyTier 2.7.0 的 `easytier-proto/proto` 保持逐字一致。
 
 ## 许可证
 

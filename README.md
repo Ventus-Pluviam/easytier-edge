@@ -130,7 +130,7 @@ Only peers that complete `NetworkSecretConfirmed` authentication are admitted. L
 - Maximum simultaneous WebSocket connections per Durable Object: 2048
 - The Worker has no local TUN interface and opens no UDP hole-punch sockets; it relays the control RPC that lets clients punch paths directly between themselves.
 - Session and anti-replay state live in a non-hibernating Durable Object.
-- Protobuf schemas are copied verbatim from EasyTier 2.6.4 under `easytier/src/proto`.
+- Protobuf schemas are copied verbatim from EasyTier 2.7.0 under `easytier-proto/proto`.
 
 ## License
 

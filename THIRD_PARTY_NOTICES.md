@@ -2,7 +2,7 @@
 
 This project contains protocol definitions and a WebAssembly-portable adaptation
 of protocol logic from [EasyTier](https://github.com/EasyTier/EasyTier), revision
-`8428a89d2dabc94c97d370ec607c6ca142473626`, licensed under LGPL-3.0.
+`8b7f1f0196edb5b580829ed5f135050fb5853478`, licensed under LGPL-3.0.
 
 The WASM OSPF route-state and PeerCenter structure was informed by
 [`21paradox/easytier-ws-relay`](https://github.com/21paradox/easytier-ws-relay),

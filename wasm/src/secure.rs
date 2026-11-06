@@ -380,6 +380,10 @@ impl SecurePeer {
             a_conn_id_echo: self.a_conn_id.clone(),
             secret_proof_32: Some(proof),
             server_encryption_algorithm: SERVER_ENCRYPTION_ALGORITHM.to_string(),
+            // 2.7.0 起握手可携带特性声明;本中继不实现
+            // liveness-echo-v1 探测，不广播任何特性，客户端因此不会
+            // 在此链路上启用对应标记位。
+            features: Vec::new(),
         };
         let mut noise_message = vec![0_u8; 4096];
         let len = handshake
